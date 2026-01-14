@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+import product_routes from '../routes/product_route';
+import warehouse_routes from '../routes/warehouse_route';
+import inventory_routes from '../routes/inventory_route';
+import transaction_routes from '../routes/transaction_route'; 
+import auth_routes from '../routes/auth_routes';
 
 dotenv.config();
 
@@ -12,6 +17,13 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors()); 
 app.use(express.json()); 
+
+// Routes
+app.use('/api/products', product_routes);
+app.use('/api/warehouses', warehouse_routes);
+app.use('/api/inventory', inventory_routes);
+app.use('/api/transactions', transaction_routes);
+app.use('/api/auth', auth_routes);
 
 // Health Check 
 app.get('/api/health', (req, res) => {
