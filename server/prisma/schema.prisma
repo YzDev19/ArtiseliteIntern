@@ -1,0 +1,143 @@
+// server/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------
+// 1. USER MANAGEMENT (Compulsory Feature 4)
+// --------------------------------------
+
+enum Role {
+  ADMIN
+  MANAGER
+  OPERATOR
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  password     String
+  name         String
+  role         Role       @default(OPERATOR)
+  createdAt    DateTime   @default(now())
+  
+  // Relations
+  logs         AuditLog[] // A user generates many logs
+}
+
+// --------------------------------------
+// 2. WAREHOUSE MANAGEMENT (Additional Feature 4)
+// --------------------------------------
+
+model Warehouse {
+  id        Int         @id @default(autoincrement())
+  name      String
+  location  String
+  
+  // Relations
+  inventory Inventory[] // A warehouse has many inventory records
+  inbound   Inbound[]
+  outbound  Outbound[]
+}
+
+// --------------------------------------
+// 3. PRODUCT & INVENTORY (Compulsory 1 + Feature 9 + Feature 4)
+// --------------------------------------
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  sku         String   @unique
+  name        String
+  description String?
+  category    String
+  price       Decimal  // Selling Price
+  costPrice   Decimal  // (Feature 9: Valuation)
+  minStock    Int      // Low stock alert threshold
+  
+  // Relations
+  inventory   Inventory[]
+  inboundItems InboundItem[]
+  outboundItems OutboundItem[]
+}
+
+// THE PIVOT TABLE (Crucial for Multi-Warehouse)
+model Inventory {
+  id           Int       @id @default(autoincrement())
+  productId    Int
+  warehouseId  Int
+  quantity     Int       @default(0)
+
+  product      Product   @relation(fields: [productId], references: [id])
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+
+  // Composite unique constraint: 
+  // A product can only appear once per warehouse
+  @@unique([productId, warehouseId])
+}
+
+// --------------------------------------
+// 4. TRANSACTIONS (Compulsory 2 & 3)
+// --------------------------------------
+
+model Inbound {
+  id            Int           @id @default(autoincrement())
+  reference     String        // Invoice number
+  dateReceived  DateTime      @default(now())
+  warehouseId   Int
+  
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  items         InboundItem[]
+}
+
+model InboundItem {
+  id          Int      @id @default(autoincrement())
+  inboundId   Int
+  productId   Int
+  quantity    Int
+  
+  inbound     Inbound @relation(fields: [inboundId], references: [id])
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model Outbound {
+  id            Int            @id @default(autoincrement())
+  reference     String         // SO number
+  dateShipped   DateTime       @default(now())
+  warehouseId   Int
+  destination   String
+  
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  items         OutboundItem[]
+}
+
+model OutboundItem {
+  id          Int      @id @default(autoincrement())
+  outboundId  Int
+  productId   Int
+  quantity    Int
+  
+  outbound    Outbound @relation(fields: [outboundId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+// --------------------------------------
+// 5. AUDIT LOGS (Additional Feature 7)
+// --------------------------------------
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String   // e.g., "INBOUND_CREATED", "STOCK_ADJUSTMENT"
+  entity    String   // e.g., "Product", "Inventory"
+  entityId  Int?     // The ID of the record changed
+  details   Json?    // Snapshot of changes or description
+  timestamp DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
