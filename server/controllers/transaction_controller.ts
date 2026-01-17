@@ -3,14 +3,13 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Inbound stocks
+// Process incoming stock and update inventory levels
 export const createInbound = async (req: Request, res: Response) => {
   const { warehouseId, reference, items } = req.body; 
- 
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // A. Create inbound record
+      // Create the inbound shipment record and its associated items
       const inbound = await tx.inbound.create({
         data: {
           warehouseId,
@@ -25,7 +24,7 @@ export const createInbound = async (req: Request, res: Response) => {
         include: { items: true }
       });
 
-      // B. Update inventory stock
+      // Increment stock levels or create new inventory records if they do not exist
       for (const item of items) {
         await tx.inventory.upsert({
           where: {
@@ -46,14 +45,14 @@ export const createInbound = async (req: Request, res: Response) => {
   }
 };
 
-// 2. Outbound stock
+// Process stock dispatches after verifying availability
 export const createOutbound = async (req: Request, res: Response) => {
   const { warehouseId, reference, destination, items } = req.body;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // A. Check if stock available
       for (const item of items) {
+        // Validate that sufficient stock exists before deduction
         const stock = await tx.inventory.findUnique({
           where: { productId_warehouseId: { productId: item.productId, warehouseId } }
         });
@@ -62,19 +61,18 @@ export const createOutbound = async (req: Request, res: Response) => {
           throw new Error(`Insufficient stock for Product ID ${item.productId}`);
         }
 
-        // B. Deduct stock
+        // Deduct the dispatched quantity from the specific warehouse
         await tx.inventory.update({
           where: { productId_warehouseId: { productId: item.productId, warehouseId } },
           data: { quantity: { decrement: item.quantity } }
         });
       }
 
-      // C. Create outbound record
+      // Record the outbound shipment details
       const outbound = await tx.outbound.create({
         data: {
           warehouseId,
           reference,
-          destination,
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,

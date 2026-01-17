@@ -33,3 +33,19 @@ export const authorizeRole = (allowedRoles: string[]) => {
     next();
   };
 };
+
+// Role Checker Middleware
+export const authorize = (allowedRoles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // "req.user" is set by the authenticateToken function
+    const user = (req as any).user; 
+
+    if (!user) return res.status(401).json({ error: "Access denied" });
+
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({ error: "Forbidden: You do not have permission" });
+    }
+
+    next();
+  };
+};
